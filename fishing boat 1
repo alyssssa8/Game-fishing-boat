@@ -1,0 +1,301 @@
+;;name: Yu Wang
+
+
+globals [boat_status target_x target_y counter_of_low_reading_number counter_of_current_reading_list ] ;; the status of the boat
+patches-own [ fish_number reading_number  ]  ;;fish_number: actual fish number in each patch. reading_number: estimate the fish number each patch
+turtles-own [ total_number fish_caught_each_square_list  low_reading_number_list reader_list] ;;total_number: total number of fish they caught. fish_caught_each_square_list: list that contain the fish they caught each patch
+
+;;
+;;set up the procedures.
+to setup
+  clear-all
+  setup-patches
+  setup-turtles
+  label-patches
+  set boat_status "moving"
+  set counter_of_low_reading_number 0
+  set counter_of_current_reading_list 0
+  find-a-patch
+  reset-ticks
+end
+
+
+;;
+;; st up the values for each patches
+to setup-patches
+  ask patches [
+    set reading_number random 101
+    set fish_number random reading_number
+    set pcolor blue
+  ]
+end
+
+;;
+;;set up turtles for each turtle
+to setup-turtles
+  create-turtles 1 [
+    pen-down
+  ]  ;; uses the value of the number slider to create turtles
+  ask turtle 0 [
+    set color red
+    set shape "boat 3"
+    setxy 0 0
+
+    set fish_caught_each_square_list [
+      0 -1 -1 -1 -1
+      -1 -1 -1 -1 -1
+      -1 -1 -1 -1 -1
+      -1 -1 -1 -1 -1
+      -1 -1 -1 -1 -1
+    ]
+    set low_reading_number_list [
+      0 0 0 0 0
+      0 0 0 0 0
+      0 0 0 0 0
+      0 0 0 0 0
+      0 0 0 0 0
+    ]
+    set reader_list [
+      -1 -1 -1 -1 -1
+      -1 -1 -1 -1 -1
+      -1 -1 -1 -1 -1
+      -1 -1 -1 -1 -1
+      -1 -1 -1 -1 -1
+    ]
+  ]
+end
+
+;;
+;;label the values for actual fish number and reading number. set up patch 0 0
+to label-patches
+  ask patches [
+    set plabel word ( word fish_number "," ) reading_number
+  ]
+  ask patch 0 0 [
+    set plabel ""
+    set fish_number 0
+    set reading_number 0
+    set pcolor brown
+  ]
+end
+
+;;
+;; record reader value in current patch
+to record-current-reader
+  ask turtle 0 [
+    let index xcor * 5 + ycor
+    set reader_list replace-item ( index ) reader_list [reading_number] of patch-here
+  ]
+end
+
+;;
+;;check the 3 status of the boat
+to go
+  if ticks >= 20 [
+    reset-ticks
+    set target_x 0
+    set target_y 0
+    set boat_status "moving"
+    find-a-patch stop
+  ]
+  check-tick
+  ifelse (boat_status = "moving") [
+    if ( target_x != 0 ) or ( target_y != 0 )[
+      record-current-reader
+      move-to-patch target_x target_y
+    ]
+  ]
+  [
+    ifelse  (boat_status = "back_to_port") [
+      record-current-reader
+      move-to-patch 0 0
+    ]
+    [
+      if  (boat_status = "fishing") [
+        catch-fish
+      ]
+    ]
+  ]
+  tick
+end
+
+;;
+;; check if it is time to go back the port
+to check-tick
+ let tick_left (20 - ticks)
+ ask turtle 0 [
+    if tick_left <= xcor + ycor [
+      set boat_status "back_to_port"
+    ]
+  ]
+end
+
+
+
+;;
+;;to catch the fish
+to catch-fish
+  ask turtle 0
+  [
+    let fish_to_add 0
+    let boat_position xcor * 5 + ycor
+
+    ask patch-here
+    [
+      ifelse fish_number >= 10
+      [
+        set fish_to_add 10
+      ]
+      [
+        set fish_to_add fish_number
+        find-a-patch
+        set boat_status "moving"
+      ]
+
+      set fish_number fish_number - fish_to_add
+
+      set plabel word ( word fish_number "," ) reading_number
+    ]
+    set total_number total_number + fish_to_add
+
+    ;; a local variable indicating how many fish have been caught at here
+    let fish_caught_in_here item ( boat_position ) fish_caught_each_square_list
+
+    ;; set current place to 0 if it is -1
+    if fish_caught_in_here = -1 or fish_caught_in_here = -2
+    [
+      set fish_caught_in_here 0
+    ]
+    ;; increase fish_caught_in_here
+    set fish_caught_in_here fish_caught_in_here + fish_to_add
+
+    ;; set fish_caut_in_here to the list
+    set fish_caught_each_square_list replace-item ( boat_position ) fish_caught_each_square_list fish_caught_in_here
+  ]
+end
+
+;;
+;; move the patch to the expected location
+to move-to-patch [ x y ]
+  ask turtle 0 [
+    if xcor != x [
+      ifelse xcor < x [
+        set heading 90
+        forward 1
+      ] [
+        set heading 270
+        forward 1
+      ]
+    ]
+    if (xcor = x) and (ycor != y) [
+      ifelse ycor < y [
+        set heading 0
+        forward 1
+      ][
+        set heading 180
+        forward 1
+      ]
+    ]
+  ]
+  if ([xcor] of turtle 0 = x) and ([ycor] of turtle 0 = y) and ( ( x != 0 ) or ( y != 0 ) ) ;; not( ( x = 0 ) and ( y = 0 ) )
+    [
+      ask [ patch-here ] of turtle 0 [
+        let index pxcor * 5 + pycor
+        ifelse ( reading_number > 10 ) or ( item index [fish_caught_each_square_list] of turtle 0 = -2 ) [
+          set boat_status "fishing"
+        ][
+          if ( item index [fish_caught_each_square_list] of turtle 0 != 0 )
+          [
+            ask turtle 0
+            [
+              set low_reading_number_list replace-item ( counter_of_low_reading_number ) low_reading_number_list index
+              set counter_of_low_reading_number counter_of_low_reading_number + 1
+              set fish_caught_each_square_list replace-item ( index ) fish_caught_each_square_list -2
+            ]
+            find-a-patch
+          ]
+        ]
+      ]
+    ]
+end
+
+
+to find-a-patch
+  let sorted_patches no-patches
+  let radius 1
+  while [ radius < 7 ]
+  [
+    ask turtle 0
+    [
+      ;; finds patches in radius. sorts by distance to port, clostest to furthest
+      let patch_in_range ( patches in-radius radius )
+      set sorted_patches sort-on [ distance patch 0 0 ] patch_in_range
+    ]
+
+    ;; first, try to find the unfished patch with reader larger than 60
+    foreach sorted_patches [ the-patch ->
+      ask the-patch [
+        ;; won't consider current patch
+        if count turtles-here = 0
+        [
+          let index pxcor * 5 + pycor
+          if ( item index [reader_list] of turtle 0 > 60 ) and ( item index [fish_caught_each_square_list] of turtle 0 = -1 ) [
+            set target_x pxcor
+            set target_y pycor
+            stop
+          ]
+        ]
+      ]
+    ]
+
+
+    ;; second, will try to find the unfished patch closest to the port
+    foreach sorted_patches [ the-patch ->
+      ask the-patch [
+        ;; won't consider current patch
+        if count turtles-here = 0
+        [
+          let index pxcor * 5 + pycor
+          if item index [fish_caught_each_square_list] of turtle 0 = -1 [
+            set target_x pxcor
+            set target_y pycor
+            stop
+          ]
+        ]
+      ]
+    ]
+
+    ;; third, will try to find the explored patch which still has fish_number > 0 closest to the port
+    foreach sorted_patches [ the-patch ->
+      ask the-patch [
+        ;; won't consider current patch
+        if count turtles-here = 0
+        [
+          let index pxcor * 5 + pycor
+          if fish_number > 0 and item index [fish_caught_each_square_list] of turtle 0 != -2  [
+            set target_x pxcor
+            set target_y pycor
+            stop
+          ]
+        ]
+      ]
+    ]
+    ;; increase searching radius?
+    set radius radius + 1
+  ]
+
+  ;; last, try explored patch with fish reader less than 10
+  ask turtle 0
+  [
+    while [counter_of_current_reading_list < counter_of_low_reading_number ]
+    [
+      let index item counter_of_current_reading_list low_reading_number_list
+      set target_y index mod 5
+      set target_x ( index - target_y ) / 5
+      set counter_of_current_reading_list counter_of_current_reading_list + 1
+      show word "found " index
+      stop
+    ]
+  ]
+
+end
